@@ -240,7 +240,7 @@
 
   function scheduleMusic() {
     const SPB = 0.15;
-    while (nextNoteTime < audioCtx.currentTime + 0.25) {
+    while (nextNoteTime < audioCtx.currentTime + 2) {
       const n = noteIdx;
       beep(MELODY[n % MELODY.length], 0.14, 'square', 0.045, nextNoteTime - audioCtx.currentTime);
       if (n % 4 === 0) beep(BASS[(n / 4 | 0) % BASS.length], 0.5, 'triangle', 0.08, nextNoteTime - audioCtx.currentTime);
