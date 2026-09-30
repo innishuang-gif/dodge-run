@@ -338,7 +338,7 @@
     }
   }
 
-  // ---------- 像素金币（会一闪一闪） ----------
+  // ---------- 像素金币（银白色 + $ 标志，和红色球彻底区分） ----------
   function drawCoin(c) {
     const r = 5;
     const shine = Math.floor(t * 4) % 2 === 0;
@@ -347,14 +347,19 @@
         const d = Math.hypot(gx, gy);
         let col = null;
         if (d <= r - 1) {
-          col = (Math.abs(gx) <= r - 3 && Math.abs(gy) <= r - 3) ? '#ffe45c' : '#ffd700';
-          if (shine && gy <= -r + 2 && gx <= -r + 2) col = '#fff9d6';
+          col = '#f5f5fa';
+          if (Math.abs(gx) <= r - 3 && Math.abs(gy) <= r - 3) col = '#ffffff';
+          if (shine && gy <= -r + 2 && gx <= -r + 2) col = '#e8f4ff';
         } else if (d <= r) {
-          col = '#8a5a00';
+          col = '#9a9ab0';
         }
         if (col) ctx.fillRect(c.x + gx * 2 - 2, c.y + gy * 2 - 2, 2, 2);
       }
     }
+    // 中间画一个 $ 符号，一眼看出是钱
+    const dollar = [[0,-2],[-1,-1],[0,-1],[1,-1],[0,0],[-1,1],[0,1],[1,1],[0,2]];
+    ctx.fillStyle = '#5a6b8c';
+    for (const [dx, dy] of dollar) ctx.fillRect(c.x + dx * 2 - 2, c.y + dy * 2 - 2, 2, 2);
   }
 
   // ---------- 跑道 ----------
