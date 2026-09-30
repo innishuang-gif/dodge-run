@@ -97,7 +97,7 @@
     letter-spacing: 2px;
   }
   .pixel-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #7a1030; }
-  #pauseBtn {
+  #pauseBtn, #musicBtn {
     font-family: inherit;
     font-size: 11px;
     color: #c9c9f2;
@@ -108,7 +108,7 @@
     cursor: pointer;
     line-height: 1.4;
   }
-  #pauseBtn:hover { color: #ffd166; border-color: #ffd166; }
+  #pauseBtn:hover, #musicBtn:hover { color: #ffd166; border-color: #ffd166; }
   #leftSide { display: flex; align-items: center; gap: 8px; }
 
   .help {
@@ -129,6 +129,7 @@
     <div id="hud">
       <div id="leftSide">
         <button id="pauseBtn" title="Pause (P)">⏸</button>
+        <button id="musicBtn" title="Music (M)">🔊</button>
         <span id="timeEl">0.0s</span>
       </div>
       <span id="phase">WARM-UP</span>
@@ -153,7 +154,7 @@
 
   <p class="help">
     按 <b>A</b> 切到左边赛道 · 按 <b>D</b> 切到右边赛道（← → 或点击屏幕左右也可以）<br>
-    前 20 秒每 4 秒来一球 · 之后每 2.5 秒来一到两球且球速翻倍 · 路上随机刷金币，吃到右上角计数 · 按 P 或 ⏸ 暂停 · 被砸中就 GAME OVER
+    前 20 秒每 4 秒来一球 · 之后每 2.5 秒来一到两球且球速翻倍 · 路上随机刷金币，吃到右上角计数 · 按 P 或 ⏸ 暂停 · M 开关音乐 · 被砸中就 GAME OVER
   </p>
 
 <script>
@@ -198,10 +199,68 @@
   const phaseEl = document.getElementById('phase');
   const coinEl = document.getElementById('coinEl');
   const pauseBtn = document.getElementById('pauseBtn');
+  const musicBtn = document.getElementById('musicBtn');
   const menuOverlay = document.getElementById('menuOverlay');
   const menuTitle = document.getElementById('menuTitle');
   const resumeBtn = document.getElementById('resumeBtn');
   const menuRestartBtn = document.getElementById('menuRestartBtn');
+
+  // ---------- 8-bit 音效（Web Audio 直接合成，不需要音频文件） ----------
+  let audioCtx = null;
+  let musicTimer = null, musicOn = true, noteIdx = 0, nextNoteTime = 0;
+  const MELODY = [523,659,784,659, 880,784,659,523, 587,659,698,880, 784,659,587,523];
+  const BASS = [131, 110, 87, 98];
+
+  function ensureAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }
+
+  function beep(freq, dur, type = 'square', vol = 0.12, when = 0, slideTo = null) {
+    if (!audioCtx) return;
+    const t0 = audioCtx.currentTime + when;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t0);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+    g.gain.setValueAtTime(vol, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(t0); o.stop(t0 + dur + 0.05);
+  }
+
+  const sfxCoin   = () => { beep(988, 0.08); beep(1319, 0.12, 'square', 0.11, 0.06); };
+  const sfxSwitch = () => beep(620, 0.05, 'square', 0.07);
+  const sfxDeath  = () => { beep(320, 0.5, 'sawtooth', 0.18, 0, 55); beep(160, 0.35, 'square', 0.1, 0.18, 40); };
+  const sfxStart  = () => [523, 659, 784, 1047].forEach((f, i) => beep(f, 0.12, 'square', 0.1, i * 0.09));
+
+  function scheduleMusic() {
+    const SPB = 0.15;
+    while (nextNoteTime < audioCtx.currentTime + 0.25) {
+      const n = noteIdx;
+      beep(MELODY[n % MELODY.length], 0.14, 'square', 0.045, nextNoteTime - audioCtx.currentTime);
+      if (n % 4 === 0) beep(BASS[(n / 4 | 0) % BASS.length], 0.5, 'triangle', 0.08, nextNoteTime - audioCtx.currentTime);
+      noteIdx++;
+      nextNoteTime += SPB;
+    }
+  }
+  function startMusic() {
+    if (!musicOn || !audioCtx) return;
+    stopMusic();
+    noteIdx = 0;
+    nextNoteTime = audioCtx.currentTime + 0.1;
+    musicTimer = setInterval(scheduleMusic, 100);
+  }
+  function stopMusic() {
+    if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
+  }
+  function toggleMusic() {
+    musicOn = !musicOn;
+    musicBtn.textContent = musicOn ? '🔊' : '🔇';
+    if (musicOn && state === 'run') startMusic();
+    else stopMusic();
+  }
 
   // ---------- 像素小人（12×16，每像素=2px） ----------
   const PAL = { H:'#2b1b12', S:'#f2c39a', E:'#1a1a1a', R:'#e84545', B:'#3b5bd6', W:'#ffffff' };
@@ -353,6 +412,8 @@
   // ---------- 死亡：先 🤡 一秒后 😹 ----------
   function die() {
     state = 'dead';
+    stopMusic();
+    sfxDeath();
     deadT = 0;
     mocked = false;
     deadEmoji.textContent = '🤡';
@@ -364,10 +425,14 @@
     state = 'run';
     menuOverlay.classList.add('hidden');
     last = performance.now();
+    ensureAudio();
+    sfxStart();
+    startMusic();
   }
 
   function pause() {
     state = 'paused';
+    stopMusic();
     menuTitle.textContent = '⏸ PAUSED';
     resumeBtn.textContent = '▶ RESUME (P)';
     menuRestartBtn.classList.remove('hidden');
@@ -378,6 +443,7 @@
     state = 'run';
     menuOverlay.classList.add('hidden');
     last = performance.now();
+    startMusic();
   }
 
   function restart() {
@@ -394,6 +460,9 @@
     deadOverlay.classList.add('hidden');
     menuOverlay.classList.add('hidden');
     last = performance.now();
+    ensureAudio();
+    sfxStart();
+    startMusic();
   }
 
   // ---------- 主循环 ----------
@@ -433,6 +502,7 @@
       if (c.y > H + 20) return false;
       if (Math.abs(c.x - laneX) < 16 && Math.abs(c.y - (PLAYER_Y - 16)) < 24) {
         coinCount++;
+        sfxCoin();
         return false;
       }
       return true;
@@ -492,14 +562,17 @@
     if (state === 'paused') {
       if (k === 'p' || k === 'escape' || k === 'enter' || k === ' ') resume();
       if (k === 'r') restart();
+      if (k === 'm') toggleMusic();
       return;
     }
     if (k === 'p' || k === 'escape') { pause(); return; }
-    if (k === 'a' || k === 'arrowleft') { lane = Math.max(0, lane - 1); e.preventDefault(); }
-    if (k === 'd' || k === 'arrowright') { lane = Math.min(2, lane + 1); e.preventDefault(); }
+    if (k === 'm') { toggleMusic(); return; }
+    if (k === 'a' || k === 'arrowleft') { lane = Math.max(0, lane - 1); sfxSwitch(); e.preventDefault(); }
+    if (k === 'd' || k === 'arrowright') { lane = Math.min(2, lane + 1); sfxSwitch(); e.preventDefault(); }
   });
   document.getElementById('restartBtn').addEventListener('click', restart);
   pauseBtn.addEventListener('click', pause);
+  musicBtn.addEventListener('click', toggleMusic);
   resumeBtn.addEventListener('click', () => { if (state === 'ready') start(); else resume(); });
   menuRestartBtn.addEventListener('click', restart);
   // 触屏/点击：左半边=A，右半边=D
@@ -509,6 +582,7 @@
     if (state !== 'run') return;
     if (x < W / 2) lane = Math.max(0, lane - 1);
     else lane = Math.min(2, lane + 1);
+    sfxSwitch();
   });
 
   // 开局显示 START 界面
