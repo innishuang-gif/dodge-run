@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🤾 DODGE RUN - 像素躲避球跑酷</title>
+<meta name="description" content="像素风躲避球跑酷小游戏：三条赛道切换闪避飞来的球，收集金币，看你能活多久！A/D 换道，支持暂停。">
+<meta property="og:title" content="🤾 DODGE RUN - 像素躲避球跑酷">
+<meta property="og:description" content="像素风躲避球跑酷小游戏：三条赛道切换闪避飞来的球，收集金币，看你能活多久！">
+<meta property="og:type" content="website">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    background: #14102a;
+    font-family: "Press Start 2P", "Courier New", monospace;
+    color: #fff;
+    overflow: hidden;
+    padding: 12px;
+  }
+
+  h1 {
+    font-size: 22px;
+    color: #ff6fa5;
+    letter-spacing: 3px;
+    text-shadow: 0 3px 0 #7a1030;
+  }
+
+  .wrap { position: relative; }
+
+  #hud {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    font-size: 10px;
+    color: #c9c9f2;
+    margin-bottom: 6px;
+    letter-spacing: 1px;
+  }
+  #phase { color: #ffd166; }
+  #phase.hard { color: #ff5d5d; }
+  #rightSide { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+  #coinEl { color: #ffd166; }
+
+  canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    height: min(74vh, 620px);
+    width: auto;
+    display: block;
+    border: 4px solid #3a3464;
+    border-radius: 8px;
+    box-shadow: 0 0 40px rgba(255, 111, 165, 0.25);
+    background: #33334d;
+  }
+
+  .overlay {
+    position: absolute;
+    inset: 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    background: rgba(12, 8, 24, 0.85);
+    border-radius: 6px;
+    text-align: center;
+    padding: 10px;
+  }
+  .hidden { display: none !important; }
+  #deadEmoji { font-size: 84px; line-height: 1; }
+  .go {
+    font-size: 18px;
+    color: #ff5d5d;
+    letter-spacing: 2px;
+  }
+  #deadStats { font-size: 10px; color: #c9c9f2; letter-spacing: 1px; line-height: 1.8; }
+  #menuTitle { font-size: 16px; color: #ffd166; letter-spacing: 2px; }
+  .pixel-btn {
+    font-family: inherit;
+    font-size: 12px;
+    color: #fff;
+    background: #ff6fa5;
+    border: none;
+    padding: 12px 22px;
+    border-radius: 6px;
+    cursor: pointer;
+    box-shadow: 0 4px 0 #7a1030;
+    letter-spacing: 2px;
+  }
+  .pixel-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #7a1030; }
+  #pauseBtn {
+    font-family: inherit;
+    font-size: 11px;
+    color: #c9c9f2;
+    background: #23233a;
+    border: 2px solid #3a3464;
+    border-radius: 4px;
+    padding: 2px 6px;
+    cursor: pointer;
+    line-height: 1.4;
+  }
+  #pauseBtn:hover { color: #ffd166; border-color: #ffd166; }
+  #leftSide { display: flex; align-items: center; gap: 8px; }
+
+  .help {
+    font-size: 9px;
+    color: #8f8fc2;
+    letter-spacing: 1px;
+    line-height: 1.9;
+    text-align: center;
+  }
+  .help b { color: #ffd166; }
+</style>
+</head>
+<body>
+
+  <h1>🤾 DODGE RUN</h1>
+
+  <div class="wrap">
+    <div id="hud">
+      <div id="leftSide">
+        <button id="pauseBtn" title="Pause (P)">⏸</button>
+        <span id="timeEl">0.0s</span>
+      </div>
+      <span id="phase">WARM-UP</span>
+      <span id="rightSide">
+        <span id="coinEl">🪙 ×0</span>
+        <span id="distEl">0 m</span>
+      </span>
+    </div>
+    <canvas id="game" width="300" height="500"></canvas>
+    <div id="deadOverlay" class="overlay hidden">
+      <div id="deadEmoji">🤡</div>
+      <div class="go">GAME OVER</div>
+      <div id="deadStats"></div>
+      <button id="restartBtn" class="pixel-btn">RESTART (R)</button>
+    </div>
+    <div id="menuOverlay" class="overlay hidden">
+      <div id="menuTitle">🤾 DODGE RUN</div>
+      <button id="resumeBtn" class="pixel-btn">▶ START</button>
+      <button id="menuRestartBtn" class="pixel-btn hidden">🔄 RESTART (R)</button>
+    </div>
+  </div>
+
+  <p class="help">
+    按 <b>A</b> 切到左边赛道 · 按 <b>D</b> 切到右边赛道（← → 或点击屏幕左右也可以）<br>
+    前 20 秒每 4 秒来一球 · 之后每 2.5 秒来一到两球且球速翻倍 · 路上随机刷金币，吃到右上角计数 · 按 P 或 ⏸ 暂停 · 被砸中就 GAME OVER
+  </p>
+
+<script>
+  const cvs = document.getElementById('game');
+  const ctx = cvs.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  const W = 300, H = 500;
+  const LANE_X = [60, 150, 240];      // 三条赛道中心 x
+  const ROAD_L = 15, ROAD_R = 285;    // 跑道左右边界
+  const PLAYER_Y = 428;               // 小人所在的 y
+
+  // 速度：小人 10米/3秒 → 屏幕 90px/s；球速 = 小人速度(快一倍)，
+  // 迎面飞来屏幕上看起来是 180px/s；20秒后球速再翻倍 → 270px/s
+  const CHAR_SPEED = 90;
+  const BALL_REL = CHAR_SPEED;
+  const METERS_PER_SEC = 10 / 3;
+
+  // 出球节奏：前20秒每4秒一球；之后每2.5秒一到两球
+  const WARMUP_END = 20;
+  const WARMUP_INTERVAL = 4;
+  const HARD_INTERVAL = 2.5;
+
+  let state = 'ready';      // ready | run | paused | dead
+  let lane = 1;             // 0 左 / 1 中 / 2 右（开局在中间）
+  let laneX = LANE_X[1];    // 实际绘制 x（平滑移动）
+  let balls = [];
+  let coins = [];
+  let coinCount = 0;
+  let nextCoin = 1.2;
+  let t = 0;
+  let nextSpawn = 4;
+  let frame = 0, animT = 0;
+  let deadT = 0, mocked = false;
+  let last = performance.now();
+
+  const deadOverlay = document.getElementById('deadOverlay');
+  const deadEmoji = document.getElementById('deadEmoji');
+  const deadStats = document.getElementById('deadStats');
+  const timeEl = document.getElementById('timeEl');
+  const distEl = document.getElementById('distEl');
+  const phaseEl = document.getElementById('phase');
+  const coinEl = document.getElementById('coinEl');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const menuOverlay = document.getElementById('menuOverlay');
+  const menuTitle = document.getElementById('menuTitle');
+  const resumeBtn = document.getElementById('resumeBtn');
+  const menuRestartBtn = document.getElementById('menuRestartBtn');
+
+  // ---------- 像素小人（12×16，每像素=2px） ----------
+  const PAL = { H:'#2b1b12', S:'#f2c39a', E:'#1a1a1a', R:'#e84545', B:'#3b5bd6', W:'#ffffff' };
+  const SPRITE_A = [
+    '...HHHH.....',
+    '..HHHHHH....',
+    '..HSSSSSH...',
+    '..SSSSSSSS..',
+    '...S.EE.S...',
+    '..SSSSSSS...',
+    '...RRRRR....',
+    '..RRRRRRR...',
+    '.RRRRRRRRR..',
+    '.RRRRRRRRRR.',
+    '...BBBB.....',
+    '...BBBB.....',
+    '...BBBB.....',
+    '..BB...BB...',
+    '..BB...BB...',
+    '..WW...WW...',
+  ];
+  const SPRITE_B = [
+    '...HHHH.....',
+    '..HHHHHH....',
+    '..HSSSSSH...',
+    '..SSSSSSSS..',
+    '...S.EE.S...',
+    '..SSSSSSS...',
+    '...RRRRR....',
+    '..RRRRRRR...',
+    '.RRRRRRRRR..',
+    '.RRRRRRRRRR.',
+    '...BBBB.....',
+    '...BBBB.....',
+    '...BBBB.....',
+    '...BBBB.....',
+    '...BBBB.....',
+    '...WWWW.....',
+  ];
+
+  function drawPlayer() {
+    const rows = frame === 0 ? SPRITE_A : SPRITE_B;
+    const bob = frame === 0 ? -2 : 0;
+    // 影子
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(laneX - 14, PLAYER_Y + 2, 28, 4);
+    for (let r = 0; r < rows.length; r++) {
+      for (let c = 0; c < rows[r].length; c++) {
+        const ch = rows[r][c];
+        if (ch === '.') continue;
+        ctx.fillStyle = PAL[ch];
+        ctx.fillRect(laneX - 12 + c * 2, PLAYER_Y - 32 + r * 2 + bob, 2, 2);
+      }
+    }
+  }
+
+  // ---------- 像素球（直线迎面飞来） ----------
+  function drawBall(b) {
+    const r = 6;
+    for (let gy = -r; gy <= r; gy++) {
+      for (let gx = -r; gx <= r; gx++) {
+        const d = Math.hypot(gx, gy);
+        let c = null;
+        if (d <= r - 1) {
+          c = (gx === 0 || (gx === -1 && gy % 2 === 0)) ? '#f5f5f5' : '#d92b2b';
+          if (gy <= -r + 2 && gx <= -r + 2) c = '#ffb3b3';
+        } else if (d <= r) {
+          c = '#6e0f0f';
+        }
+        if (c) ctx.fillRect(b.x + gx * 2 - 2, b.y + gy * 2 - 2, 2, 2);
+      }
+    }
+  }
+
+  // ---------- 像素金币（会一闪一闪） ----------
+  function drawCoin(c) {
+    const r = 5;
+    const shine = Math.floor(t * 4) % 2 === 0;
+    for (let gy = -r; gy <= r; gy++) {
+      for (let gx = -r; gx <= r; gx++) {
+        const d = Math.hypot(gx, gy);
+        let col = null;
+        if (d <= r - 1) {
+          col = (Math.abs(gx) <= r - 3 && Math.abs(gy) <= r - 3) ? '#ffe45c' : '#ffd700';
+          if (shine && gy <= -r + 2 && gx <= -r + 2) col = '#fff9d6';
+        } else if (d <= r) {
+          col = '#8a5a00';
+        }
+        if (col) ctx.fillRect(c.x + gx * 2 - 2, c.y + gy * 2 - 2, 2, 2);
+      }
+    }
+  }
+
+  // ---------- 跑道 ----------
+  function drawRoad() {
+    // 两侧墙壁
+    ctx.fillStyle = '#23233a';
+    ctx.fillRect(0, 0, ROAD_L, H);
+    ctx.fillRect(ROAD_R, 0, W - ROAD_R, H);
+    ctx.fillStyle = '#2b2b46';
+    for (let x = 0; x < ROAD_L; x += 10) ctx.fillRect(x, 0, 4, H);
+    for (let x = ROAD_R; x < W; x += 10) ctx.fillRect(x, 0, 4, H);
+    // 路面
+    ctx.fillStyle = '#33334d';
+    ctx.fillRect(ROAD_L, 0, ROAD_R - ROAD_L, H);
+    // 车道虚线（随前进滚动）
+    ctx.fillStyle = '#55557a';
+    const dashH = 16, gap = 26;
+    const off = (t * CHAR_SPEED) % (dashH + gap);
+    for (const x of [ROAD_L + 90, ROAD_L + 180]) {
+      for (let y = off - (dashH + gap); y < H; y += dashH + gap) {
+        ctx.fillRect(x - 3, y, 6, dashH);
+      }
+    }
+    // 墙壁上的小爱心装饰
+    const heart = ['RR.RR','RRRRR','RRRRR','.RRR.','..R..'];
+    for (let i = 0; i < 4; i++) {
+      const y = ((i * 140 + t * CHAR_SPEED) % (H + 40)) - 24;
+      for (const wx of [4, 291]) {
+        for (let r = 0; r < heart.length; r++) {
+          for (let c = 0; c < heart[r].length; c++) {
+            if (heart[r][c] === 'R') {
+              ctx.fillStyle = 'rgba(220,220,235,0.4)';
+              ctx.fillRect(wx + c * 2, y + r * 2, 2, 2);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // ---------- 出球逻辑（永远不三线齐发） ----------
+  function trySpawn() {
+    const occupied = new Set(balls.filter(b => b.y < H + 20).map(b => b.lane));
+    const free = [0, 1, 2].filter(l => !occupied.has(l));
+    if (free.length === 0) return;
+    // 只有三条道全空时才可能一次出两球，否则只出一球，保证不会三线齐发
+    let n = 1;
+    if (free.length === 3 && Math.random() < 0.5) n = 2;
+    for (let i = free.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [free[i], free[j]] = [free[j], free[i]];
+    }
+    for (let i = 0; i < n; i++) {
+      balls.push({ lane: free[i], x: LANE_X[free[i]], y: -16 });
+    }
+  }
+
+  // ---------- 死亡：先 🤡 一秒后 😹 ----------
+  function die() {
+    state = 'dead';
+    deadT = 0;
+    mocked = false;
+    deadEmoji.textContent = '🤡';
+    deadStats.innerHTML = `SURVIVED <b>${t.toFixed(1)}s</b> · <b>${Math.floor(t * METERS_PER_SEC)} m</b> · 🪙 <b>×${coinCount}</b>`;
+    deadOverlay.classList.remove('hidden');
+  }
+
+  function start() {
+    state = 'run';
+    menuOverlay.classList.add('hidden');
+    last = performance.now();
+  }
+
+  function pause() {
+    state = 'paused';
+    menuTitle.textContent = '⏸ PAUSED';
+    resumeBtn.textContent = '▶ RESUME (P)';
+    menuRestartBtn.classList.remove('hidden');
+    menuOverlay.classList.remove('hidden');
+  }
+
+  function resume() {
+    state = 'run';
+    menuOverlay.classList.add('hidden');
+    last = performance.now();
+  }
+
+  function restart() {
+    state = 'run';
+    lane = 1;
+    laneX = LANE_X[1];
+    balls = [];
+    coins = [];
+    coinCount = 0;
+    nextCoin = 1.2;
+    t = 0;
+    nextSpawn = 4;
+    frame = 0;
+    deadOverlay.classList.add('hidden');
+    menuOverlay.classList.add('hidden');
+    last = performance.now();
+  }
+
+  // ---------- 主循环 ----------
+  function step(dt) {
+    if (state === 'dead') {
+      deadT += dt;
+      if (deadT >= 1 && !mocked) { mocked = true; deadEmoji.textContent = '😹'; }
+      return;
+    }
+    if (state !== 'run') return;   // ready / paused：画面静止
+
+    t += dt;
+    animT += dt;
+    if (animT > 0.12) { animT = 0; frame ^= 1; }
+    laneX += (LANE_X[lane] - laneX) * Math.min(1, dt * 14);
+
+    // 出球
+    if (t >= nextSpawn) {
+      trySpawn();
+      nextSpawn = t + (t < WARMUP_END ? WARMUP_INTERVAL : HARD_INTERVAL);
+    }
+    // 球直线飞向小人（屏幕上向下）；20秒后球速再翻倍
+    const ballVy = CHAR_SPEED + (t >= WARMUP_END ? CHAR_SPEED : BALL_REL);
+    for (const b of balls) b.y += ballVy * dt;
+    balls = balls.filter(b => b.y < H + 24);
+
+    // 金币：随机刷在路面上，随地面向后滚动，吃到就 +1
+    if (t >= nextCoin) {
+      const cl = Math.floor(Math.random() * 3);
+      // 不要刷在刚出球的路口，避免被迫撞球
+      const danger = balls.some(b => b.lane === cl && b.y < 160);
+      if (!danger) coins.push({ lane: cl, x: LANE_X[cl], y: -12 });
+      nextCoin = t + 0.8 + Math.random() * 0.8;
+    }
+    for (const c of coins) c.y += CHAR_SPEED * dt;
+    coins = coins.filter(c => {
+      if (c.y > H + 20) return false;
+      if (Math.abs(c.x - laneX) < 16 && Math.abs(c.y - (PLAYER_Y - 16)) < 24) {
+        coinCount++;
+        return false;
+      }
+      return true;
+    });
+
+    // 碰撞：球 vs 小人矩形（最近点距离）
+    for (const b of balls) {
+      const cx = Math.max(laneX - 12, Math.min(b.x, laneX + 12));
+      const cy = Math.max(PLAYER_Y - 32, Math.min(b.y, PLAYER_Y));
+      if ((b.x - cx) ** 2 + (b.y - cy) ** 2 < 10 * 10) { die(); break; }
+    }
+  }
+
+  function draw() {
+    drawRoad();
+    for (const c of coins) drawCoin(c);
+    for (const b of balls) drawBall(b);
+    drawPlayer();
+    if (state === 'dead') {
+      ctx.fillStyle = 'rgba(255,0,60,0.18)';
+      ctx.fillRect(0, 0, W, H);
+    }
+    // HUD
+    pauseBtn.classList.toggle('hidden', state !== 'run');
+    timeEl.textContent = t.toFixed(1) + 's';
+    distEl.textContent = Math.floor(t * METERS_PER_SEC) + ' m';
+    coinEl.textContent = '🪙 ×' + coinCount;
+    if (t < WARMUP_END) {
+      phaseEl.textContent = 'WARM-UP';
+      phaseEl.classList.remove('hard');
+    } else {
+      phaseEl.textContent = 'HARD MODE';
+      phaseEl.classList.add('hard');
+    }
+  }
+
+  function loop(now) {
+    const dt = Math.min((now - last) / 1000, 0.05);
+    last = now;
+    step(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  // ---------- 操作 ----------
+  addEventListener('keydown', e => {
+    const k = e.key.toLowerCase();
+    if (state === 'ready') {
+      if (k === 'enter' || k === ' ') { start(); e.preventDefault(); }
+      return;
+    }
+    if (state === 'dead') {
+      if (k === 'r' || k === 'enter') restart();
+      return;
+    }
+    if (state === 'paused') {
+      if (k === 'p' || k === 'escape' || k === 'enter' || k === ' ') resume();
+      if (k === 'r') restart();
+      return;
+    }
+    if (k === 'p' || k === 'escape') { pause(); return; }
+    if (k === 'a' || k === 'arrowleft') { lane = Math.max(0, lane - 1); e.preventDefault(); }
+    if (k === 'd' || k === 'arrowright') { lane = Math.min(2, lane + 1); e.preventDefault(); }
+  });
+  document.getElementById('restartBtn').addEventListener('click', restart);
+  pauseBtn.addEventListener('click', pause);
+  resumeBtn.addEventListener('click', () => { if (state === 'ready') start(); else resume(); });
+  menuRestartBtn.addEventListener('click', restart);
+  // 触屏/点击：左半边=A，右半边=D
+  cvs.addEventListener('pointerdown', e => {
+    const rect = cvs.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width * W;
+    if (state !== 'run') return;
+    if (x < W / 2) lane = Math.max(0, lane - 1);
+    else lane = Math.min(2, lane + 1);
+  });
+
+  // 开局显示 START 界面
+  menuTitle.textContent = '🤾 DODGE RUN';
+  resumeBtn.textContent = '▶ START';
+  menuRestartBtn.classList.add('hidden');
+  menuOverlay.classList.remove('hidden');
+</script>
+</body>
+</html>
