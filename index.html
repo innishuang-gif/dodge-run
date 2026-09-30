@@ -338,15 +338,14 @@
     }
   }
 
-  // ---------- 像素金币（红色三角 + $ 标志，和蓝色圆球彻底区分） ----------
+  // ---------- 像素金币（红色三角 + $ 标志，颜色固定不闪） ----------
   function drawCoin(c) {
-    const shine = Math.floor(t * 4) % 2 === 0;
     for (let gy = -5; gy <= 0; gy++) {
       const half = 5 + gy;
       for (let gx = -half; gx <= half; gx++) {
         const edge = Math.abs(gx) === half;
         let col = edge ? '#7a0f0f' : '#e03030';
-        if (!edge && Math.abs(gx) <= 2 && gy >= -3) col = shine ? '#ff5252' : '#e03030';
+        if (!edge && Math.abs(gx) <= 2 && gy >= -3) col = '#ff5252';
         ctx.fillStyle = col;
         ctx.fillRect(c.x + gx * 2 - 2, c.y + gy * 2 - 2, 2, 2);
       }
